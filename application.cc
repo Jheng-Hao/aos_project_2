@@ -10,8 +10,10 @@
 
 using namespace std;
 
+extern pthread_mutex_t initLock;
 int m_read(std::string& str_in, int file_number=0);
 int m_write(std::string str_in, int file_number=0);
+int init(int argc, char* argv[]);
 
 namespace
 {
@@ -164,7 +166,7 @@ void ReadConfig (int &mean, int &variance, float &read_ratio)
 
 }
 
-int main (int argc, char **args)
+int main (int argc, char *argv[])
 {
         int mean = DefaultMean;
         int variance = DefaultVariance;
@@ -176,6 +178,10 @@ int main (int argc, char **args)
         cout << "**    mean = " << mean << endl;
         cout << "**    variance = " << variance << endl;
         cout << "**    read_ratio = " << read_ratio << endl;
+
+        init(argc, argv);
+
+cout << "alive here" << endl;
 
         TaskType task = kNoTask;
         while (true)
@@ -196,11 +202,15 @@ int main (int argc, char **args)
                 bool success = false;
                 if (kRead == task)
                 {
-                        m_write("doing read operation");
+                        cout << "read file..." << endl;
+                        string msg;
+                        m_read(msg);
                 }
                 else if (kWrite == task)
                 {
+                        cout << "write file..." << endl;
                         m_write("doing write operation");
+                        pthread_mutex_lock(&initLock);
                 }
                 else
                 {
