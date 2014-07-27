@@ -180,8 +180,6 @@ int main (int argc, char *argv[])
         cout << "**    read_ratio = " << read_ratio << endl;
 
         init(argc, argv);
-
-cout << "alive here" << endl;
         pthread_mutex_lock(&initLock);
 
         TaskType task = kNoTask;
@@ -205,12 +203,18 @@ cout << "alive here" << endl;
                 {
                         cout << "read file..." << endl;
                         string msg;
-                        m_read(msg);
+                        if (0 == m_read(msg))
+                        {
+                                success = true;
+                        }
                 }
                 else if (kWrite == task)
                 {
                         cout << "write file..." << endl;
-                        m_write("doing write operation");
+                        if (0 == m_write("doing write operation"))
+                        {
+                                success = true;
+                        }
                 }
                 else
                 {
@@ -222,11 +226,13 @@ cout << "alive here" << endl;
                 {
                         collision_count = 0;
                         waiting_time = NormalRandom(mean, variance);
+                        cout << "operation complete: waits " << waiting_time << " (ms)" << endl;
                 }
                 else
                 {
                         ++collision_count;
                         waiting_time = UniformRandom() * (pow(2, collision_count) - 1) * 1000;
+                        cout << "colliison: waits " << waiting_time << " (ms)" << endl;
                 }
 
                 usleep(waiting_time);
