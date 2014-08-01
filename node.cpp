@@ -190,11 +190,11 @@ void* nodeServer(void* p){
 	int i;
 	i=*(int*)p;
 	while(1){
-		char* buf=new char[1025]();
+		char* buf=new char[65000]();
 		int numRcv=1;
 		int senderId=-1,ts=-1,seq=-1,version=-1;
 		do{
-			numRcv=recv(i,buf,1025,0);
+			numRcv=recv(i,buf,65000,0);
 		}while(numRcv<=0);
 
 		cout<<"---------\n"<<buf<<"\n";
@@ -319,7 +319,7 @@ void* nodeServer(void* p){
 		else{
 			cout<<"Invalid message received\n";
 		}
-		delete(buf);
+		delete[] buf;
 	}
 }
 
@@ -397,6 +397,10 @@ int readTopologyFile(std::list<int>& neighbourIn, int& myNodeIn){
 }
 
 int init(int argc, char* argv[]){
+
+	if (argc >1){
+		STOP_flag=true;
+	}
 
 	pthread_mutex_lock(&initLock);
 
@@ -592,7 +596,7 @@ int m_write(std::string str_in, int file_number=0){
 	//append your copy
 	myFile.version++;
 	char temp[100];
-	sprintf(temp,"Version %d: ",myFile.version);
+	sprintf(temp,"version %d: ",myFile.version);
 	myFile.str.append(temp);
 	myFile.str.append(str_in);
 
