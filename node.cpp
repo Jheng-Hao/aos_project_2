@@ -43,6 +43,10 @@ bool STOP_flag=false;
 // Read Write Lock
 pthread_rwlock_t  rwLock = PTHREAD_RWLOCK_INITIALIZER;
 
+// Log file
+ofstream LogFile;
+pthread_mutex_t logFileLock= PTHREAD_MUTEX_INITIALIZER;
+
 //global struct of RDWR_REQ send
 class rdWr_req_send_c{
 public:
@@ -463,6 +467,22 @@ pthread_t runTimer(){
 	}
 	return timerId;
 }
+int recordInLogFile(string str_in){
+	pthread_mutex_lock(&logFileLock);
+
+	// record in LOG file
+	LogFile.open("logFile.txt",std::ofstream::out | std::ofstream::app);
+	if (!LogFile.is_open()){
+		cout<<"Error:::::------unable to open LOG File"<<endl;
+	}
+	else{
+		LogFile<<str_in<<", my node "<<myNode<<": Version "<<myFile.version<<"\n";
+		LogFile.flush();
+		LogFile.close();
+	}
+
+	pthread_mutex_unlock(&logFileLock);
+}	
 
 int m_read(std::string& str_in, int file_number=0){
 	int ret;
@@ -521,6 +541,9 @@ int m_read(std::string& str_in, int file_number=0){
 
 	//read your copy
 	str_in=myFile.str;
+
+	// record in LOG file
+	recordInLogFile("Read");
 
 	//release all copies
 	for(std::vector<int>::iterator i=rdWr_req_send.grantedNodes.begin();i!=rdWr_req_send.grantedNodes.end();i++){
@@ -599,6 +622,9 @@ int m_write(std::string str_in, int file_number=0){
 	sprintf(temp,"version %d: ",myFile.version);
 	myFile.str.append(temp);
 	myFile.str.append(str_in);
+
+	// record in LOG file
+	recordInLogFile("Write");
 
 	//send update response to all copies
 	for(std::vector<int>::iterator i=rdWr_req_send.grantedNodes.begin();i!=rdWr_req_send.grantedNodes.end();i++){
