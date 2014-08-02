@@ -530,6 +530,9 @@ int m_read(std::string& str_in, int file_number=0){
 		pthread_rwlock_unlock(&rwLock );
 		return -1;
 	}
+	// record read start in logfile
+	recordInLogFile("Read Start,");
+
 	//check if stale version
 	if(myFile.version < rdWr_req_send.highestVer){
 		// use conditional variable to wait till thread completes
@@ -542,8 +545,8 @@ int m_read(std::string& str_in, int file_number=0){
 	//read your copy
 	str_in=myFile.str;
 
-	// record in LOG file
-	recordInLogFile("Read");
+	// record read end in logfile
+	recordInLogFile("Read End,");
 
 	//release all copies
 	for(std::vector<int>::iterator i=rdWr_req_send.grantedNodes.begin();i!=rdWr_req_send.grantedNodes.end();i++){
@@ -606,6 +609,8 @@ int m_write(std::string str_in, int file_number=0){
 		pthread_rwlock_unlock(&rwLock );
 		return -1;
 	}
+	//record write start in logfile
+	recordInLogFile("Write Start,");
 
 	//check if stale version
 	if(myFile.version<rdWr_req_send.highestVer){
@@ -623,13 +628,13 @@ int m_write(std::string str_in, int file_number=0){
 	myFile.str.append(temp);
 	myFile.str.append(str_in);
 
-	// record in LOG file
-	recordInLogFile("Write");
-
 	//send update response to all copies
 	for(std::vector<int>::iterator i=rdWr_req_send.grantedNodes.begin();i!=rdWr_req_send.grantedNodes.end();i++){
 		sendUPDATE_REP(*i);
 	}
+	//record write end in logfile
+	recordInLogFile("Write End,");
+
 	//release all copies
 	for(std::vector<int>::iterator i=rdWr_req_send.grantedNodes.begin();i!=rdWr_req_send.grantedNodes.end();i++){
 		sendRELEASE(*i);	

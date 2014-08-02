@@ -5,47 +5,42 @@ def ParseLine (line):
         if not line:
                 return None
 
-        tokens = line.split()
-        if 0 == len(tokens):
-                return None
-
-        tag = tokens[0]
-
-        tokens = tag.split('_');
-        if 2 != len(tokens):
-                return None
-
         ret_val = []
-        if tokens[0].startswith('w'):
+        if line.startswith("Write Start"):
                 ret_val.append('w')
-                try:
-                        value = int(tokens[0][1:])
-                except ValueError:
-                        return None
-                ret_val.append(value)
-        elif tokens[0].startswith('r'):
-                ret_val.append('r')
-                try:
-                        value = int(tokens[0][1:])
-                except ValueError:
-                        return None
-                ret_val.append(value)
-        else:
-                return None
-
-        if "start" == tokens[1]:
                 ret_val.append('s')
-        elif "end" == tokens[1]:
+        elif line.startswith("Write End"):
+                ret_val.append('w')
+                ret_val.append('e')
+        elif line.startswith("Read Start"):
+                ret_val.append('r')
+                ret_val.append('s')
+        elif line.startswith("Read End"):
+                ret_val.append('r')
                 ret_val.append('e')
         else:
                 return None
 
+
+        version_tag = "Version "
+        version_idx = line.find(version_tag)
+        if -1 == version_idx:
+                return None
+
+        version_idx = version_idx + len(version_tag)
+        try:
+                version = int(line[version_idx:])
+        except ValueError:
+                return None
+        ret_val.append(version)
+
         return ret_val
                 
 
-file_name = "log"
+file_name = "logFile.txt"
 exclusion_satisfied = True
 with open(file_name, 'r') as f:
+        err_msg = ""
         while True:
                 line = f.readline()
                 if not line:
@@ -56,8 +51,9 @@ with open(file_name, 'r') as f:
                         print "unhandled line: " + line
 
                 if 'w' == ret_val[0]:
-                        if 's' != ret_val[2]:
+                        if 's' != ret_val[1]:
                                 exclusion_satisfied = False
+                                err_msg = "not Write Start"
                                 break
 
                         next_line = f.readline()
@@ -66,20 +62,28 @@ with open(file_name, 'r') as f:
 
                         next_ret_val = ParseLine(next_line)
                         if next_ret_val is None:
+                                print "unhandled line: " + line
                                 exclusion_satisfied = False
+                                err_msg = "not Write operation"
                                 break
 
                         if 'w' != next_ret_val[0]:
                                 exclusion_satisfied = False
+                                err_msg = "not Write operation"
                                 break
 
-                        if ret_val[1] != next_ret_val[1]:
+                        if 'e' != next_ret_val[1]:
                                 exclusion_satisfied = False
+                                err_msg = "not Write End"
                                 break
 
-                        if 'e' != next_ret_val[2]:
+                        if (ret_val[2] + 1) != next_ret_val[2]:
                                 exclusion_satisfied = False
+                                print "Write Start vertion: " + str(ret_val[2])
+                                print "Write End version: " + str(next_ret_val[2])
+                                err_msg = "invalid version number"
                                 break
+
 
                         continue
 
@@ -87,6 +91,7 @@ with open(file_name, 'r') as f:
                 print "exclusion satisfied"
         else:
                 print "exclusion violated"
+                print err_msg
 
 
 
