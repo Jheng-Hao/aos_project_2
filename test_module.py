@@ -50,6 +50,7 @@ with open(file_name, 'r') as f:
                 ret_val = ParseLine(line)
                 if ret_val is None:
                         print "unhandled line: " + line
+                        continue
 
                 if 'w' == ret_val[0]:
                         if 's' != ret_val[1]:
