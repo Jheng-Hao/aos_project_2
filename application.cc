@@ -225,6 +225,7 @@ int main (int argc, char *argv[])
                 if (success)
                 {
                         collision_count = 0;
+                        task = kNoTask;
                         waiting_time = NormalRandom(mean, variance);
                         cout << "operation complete: waits " << waiting_time << " (ms)" << endl;
                 }
