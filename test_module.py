@@ -40,6 +40,7 @@ def ParseLine (line):
 file_name = "logFile.txt"
 exclusion_satisfied = True
 with open(file_name, 'r') as f:
+        latest_version_number = 0
         err_msg = ""
         while True:
                 line = f.readline()
@@ -77,14 +78,23 @@ with open(file_name, 'r') as f:
                                 err_msg = "not Write End"
                                 break
 
-                        if (ret_val[2] + 1) != next_ret_val[2]:
+                        # Write Start Version < Write End Version
+                        if ret_val[2] >= next_ret_val[2]:
                                 exclusion_satisfied = False
-                                print "Write Start vertion: " + str(ret_val[2])
-                                print "Write End version: " + str(next_ret_val[2])
+                                print "Write Start Vertion: " + str(ret_val[2])
+                                print "Write End Version: " + str(next_ret_val[2])
                                 err_msg = "invalid version number"
                                 break
 
+                        # Write End Version is strict monotonic
+                        if next_ret_val[2] <= latest_version_number:
+                                exclusion_satisfied = False
+                                print "Latest Version: " + str(latest_version)
+                                print "Write End Version: " + str(next_ret_val[2])
+                                err_msg = "version number is not strict monotonic"
+                                break
 
+                        latest_version_number = next_ret_val[2]
                         continue
 
         if exclusion_satisfied:
