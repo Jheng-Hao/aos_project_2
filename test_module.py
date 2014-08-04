@@ -7,17 +7,13 @@ def ParseLine (line):
 
         ret_val = []
         if line.startswith("Write Start"):
-                ret_val.append('w')
-                ret_val.append('s')
+                ret_val.append("ws")
         elif line.startswith("Write End"):
-                ret_val.append('w')
-                ret_val.append('e')
+                ret_val.append("we")
         elif line.startswith("Read Start"):
-                ret_val.append('r')
-                ret_val.append('s')
+                ret_val.append("rs")
         elif line.startswith("Read End"):
-                ret_val.append('r')
-                ret_val.append('e')
+                ret_val.append("re")
         else:
                 return None
 
@@ -40,8 +36,11 @@ def ParseLine (line):
 file_name = "logFile.txt"
 exclusion_satisfied = True
 with open(file_name, 'r') as f:
-        latest_version_number = 0
+        latest_version_number = 1
         err_msg = ""
+        read_start_count = 0
+        read_end_count = 0
+
         while True:
                 line = f.readline()
                 if not line:
@@ -52,10 +51,9 @@ with open(file_name, 'r') as f:
                         print "unhandled line: " + line
                         continue
 
-                if 'w' == ret_val[0]:
-                        if 's' != ret_val[1]:
-                                exclusion_satisfied = False
-                                err_msg = "not Write Start"
+                if "ws" == ret_val[0]:
+                        if read_start_count != read_end_count:
+                                print "[WARNING] Read Start and Read End are not consistent"
                                 break
 
                         next_line = f.readline()
@@ -66,37 +64,43 @@ with open(file_name, 'r') as f:
                         if next_ret_val is None:
                                 print "unhandled line: " + line
                                 exclusion_satisfied = False
-                                err_msg = "not Write operation"
+                                err_msg = "not Write End"
                                 break
 
-                        if 'w' != next_ret_val[0]:
-                                exclusion_satisfied = False
-                                err_msg = "not Write operation"
-                                break
-
-                        if 'e' != next_ret_val[1]:
+                        if "we" != next_ret_val[0]:
                                 exclusion_satisfied = False
                                 err_msg = "not Write End"
                                 break
 
                         # Write Start Version < Write End Version
-                        if ret_val[2] >= next_ret_val[2]:
+                        if ret_val[1] >= next_ret_val[1]:
                                 exclusion_satisfied = False
-                                print "Write Start Vertion: " + str(ret_val[2])
-                                print "Write End Version: " + str(next_ret_val[2])
+                                print "Write Start Vertion: " + str(ret_val[1])
+                                print "Write End Version: " + str(next_ret_val[1])
                                 err_msg = "invalid version number"
                                 break
 
                         # Write End Version is strict monotonic
-                        if next_ret_val[2] <= latest_version_number:
+                        if next_ret_val[1] <= latest_version_number:
                                 exclusion_satisfied = False
                                 print "Latest Version: " + str(latest_version)
-                                print "Write End Version: " + str(next_ret_val[2])
+                                print "Write End Version: " + str(next_ret_val[1])
                                 err_msg = "version number is not strict monotonic"
                                 break
 
-                        latest_version_number = next_ret_val[2]
+                        latest_version_number = next_ret_val[1]
                         continue
+                elif "rs" == ret_val[0]:
+                        read_start_count = read_start_count + 1
+                        if latest_version_number != ret_val[1]:
+                                print "[WARNING] did not read the latest version"
+                elif "re" == ret_val[0]:
+                        read_end_count = read_end_count + 1
+                        if latest_version_number != ret_val[1]:
+                                print "[WARNING] did not read the latest version"
+                else:
+                        print "unhandled tag: " + ret_val[0]
+                        print line
 
         if exclusion_satisfied:
                 print "exclusion satisfied"
