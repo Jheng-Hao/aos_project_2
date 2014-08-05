@@ -92,12 +92,11 @@ with open(file_name, 'r') as f:
                         continue
                 elif "rs" == ret_val[0]:
                         read_start_count = read_start_count + 1
-                        if latest_version_number != ret_val[1]:
-                                print "[WARNING] did not read the latest version"
                 elif "re" == ret_val[0]:
                         read_end_count = read_end_count + 1
                         if latest_version_number != ret_val[1]:
                                 print "[WARNING] did not read the latest version"
+                                print line
                 else:
                         print "unhandled tag: " + ret_val[0]
                         print line

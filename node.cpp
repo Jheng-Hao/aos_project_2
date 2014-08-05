@@ -36,6 +36,8 @@ pthread_mutex_t myFileLock= PTHREAD_MUTEX_INITIALIZER;
 // global Data
 std::list<int> neighbours;
 int myNode;
+int myVotes=0;
+int totalVotes=0;
 int readQuorumSize;
 int writeQuorumSize;
 bool STOP_flag=false;
@@ -53,16 +55,17 @@ public:
 	int seq;
 	int highestVer;
 	int senderHighestVer;
+	int votesIn;
 	int needed;
 	std::vector<int> grantedNodes;
 	rdWr_req_send_c(){
-		seq=-1;highestVer=-1;senderHighestVer=-1;needed=0xfffffff;
+		seq=-1;highestVer=-1;senderHighestVer=-1;needed=0xfffffff,votesIn;
 	}
 	rdWr_req_send_c(int s,int hV, int gN){
 		seq=s;highestVer=hV;senderHighestVer=gN;
 	}
 	int destroy(){
-		seq=-1;highestVer=-1;grantedNodes.clear();needed=0xfffffff;
+		seq=-1;highestVer=-1;grantedNodes.clear();needed=0xfffffff,votesIn=-1;
 	}
 	int eraseSeq(){
 		seq=-1;
@@ -177,7 +180,7 @@ int sendRELEASE(int destNode){
 }
 int sendGRANT(int destNode,int seq_in){
 	char temp[200];
-	sprintf(temp,"Sender:%02d Seq:%d Type:GRANT Version:%d",myNode,seq_in,myFile.version);
+	sprintf(temp,"Sender:%02d Seq:%d Type:GRANT Version:%d Votes:%d",myNode,seq_in,myFile.version,myVotes);
 
 	pthread_mutex_lock(&sendLock);
 	if(send(sendSockDes[destNode],temp,strlen(temp),0)!=strlen(temp)){
@@ -188,7 +191,7 @@ int sendGRANT(int destNode,int seq_in){
 
 void* nodeServer(void* p){
 	// MSG format: 
-	// Sender:<node> Seq:<seq no> Type:<type> Version:<version no> TS:<logical clk> Msg: "xxxxx"
+	// Sender:<node> Seq:<seq no> Type:<type> Version:<version no> TS:<logical clk> Msg: "xxxxx", Votes:<my votes>
 	// <type>= READ_REQ, WRITE_REQ, UPDATE_REQ, UPDATE_REP, GRANT, RELEASE
 
 	int i;
@@ -196,7 +199,7 @@ void* nodeServer(void* p){
 	while(1){
 		char* buf=new char[65000]();
 		int numRcv=1;
-		int senderId=-1,ts=-1,seq=-1,version=-1;
+		int senderId=-1,ts=-1,seq=-1,version=-1,votesRecd=-1;
 		do{
 			numRcv=recv(i,buf,65000,0);
 		}while(numRcv<=0);
@@ -218,10 +221,16 @@ void* nodeServer(void* p){
 		if(seq_ptr!=NULL){
 			seq=atoi(seq_ptr+strlen("Seq:"));	
 		}
+
 		char* version_ptr=strstr(buf,"Version:");
 		if(version_ptr!=NULL){
 			version=atoi(version_ptr+strlen("Version:"));
 		}
+
+		char* votesRecd_ptr=strstr(buf,"Votes:");
+		if(votesRecd_ptr!=NULL){
+			votesRecd=atoi(votesRecd_ptr + strlen("Votes:"));
+		}	
 
 		char* type=strstr(buf,"Type:");
 		if (type!=NULL){
@@ -253,7 +262,11 @@ void* nodeServer(void* p){
 			}
 			// if "GRANT" message
 			else if(strstr(type,"GRANT")==type){
-
+				
+				if(votesRecd==-1){
+					cout<<"Votes not received in GRANT message"<<endl;
+					exit(1);
+				}
 				//update rdWr_req_send
 				pthread_mutex_lock(&rdWr_req_sendLock);
 
@@ -269,9 +282,10 @@ void* nodeServer(void* p){
 						rdWr_req_send.senderHighestVer=senderId;
 					}
 					rdWr_req_send.grantedNodes.push_back(senderId);
+					rdWr_req_send.votesIn=rdWr_req_send.votesIn+ votesRecd;
 
 					//check if read quorum is fulfilled
-					if(rdWr_req_send.grantedNodes.size()>=rdWr_req_send.needed){
+					if(rdWr_req_send.votesIn >= rdWr_req_send.needed){
 						//clear rdWr_req_send.Seq and wake up reading
 						rdWr_req_send.eraseSeq();
 						pthread_cond_signal(&rdWr_req_sendCondVar);
@@ -369,10 +383,6 @@ int readTopologyFile(std::list<int>& neighbourIn, int& myNodeIn){
 	std::string str;
 	char* cStr;
 	char hName[100];
-	if (topology.is_open()){
-		getline(topology,str);
-	}
-	else cout<<"cant open topology file\n";
 
 	if (0!=gethostname(hName, 100)){
 		cout<<"error in gettting hostname\n";
@@ -383,21 +393,30 @@ int readTopologyFile(std::list<int>& neighbourIn, int& myNodeIn){
 	strncpy(myNode,hName+3,3);
 	myNode[2]='\0';
 	myNodeIn=atoi(myNode);
-	char* read;
 	int nNode;
-	cStr=new char[str.length()+1]();
-	strcpy(cStr,str.c_str());
-	//cout<<"cStr="<<cStr;
-	read=strtok(cStr," ");
-	while(read!=NULL){
-		nNode=atoi(read);
-		if (nNode!=myNodeIn){
-			neighbourIn.push_back(nNode);
-		}	
-		read=strtok(NULL," ");
+	int votes;
+	
+	if (topology.is_open()){
+		while(0!=getline(topology,str)){
+			strcpy(cStr,str.c_str());
+			nNode=atoi(cStr);
+			cStr=strstr(cStr," ");
+			votes=atoi(cStr);
+			if (nNode!=myNodeIn){
+				neighbourIn.push_back(nNode);
+			}	
+			else{	
+				myVotes=votes;
+			}
+			totalVotes+=votes;
+		}
 	}
-	writeQuorumSize=(neighbourIn.size()+1)/2 +1;
-	readQuorumSize=(neighbourIn.size()+1) - writeQuorumSize +1;
+	else {
+		cout<<"cant open topology file\n";
+	}
+
+	writeQuorumSize=(totalVotes)/2 +1;
+	readQuorumSize=totalVotes - writeQuorumSize +1;
 }
 
 int init(int argc, char* argv[]){
@@ -416,6 +435,8 @@ int init(int argc, char* argv[]){
 	}
 
 	cout<<"myNode="<<myNode<<"\n";
+	cout<<"myVotes="<<myVotes<<endl;
+	cout<<"totalVotes="<<totalVotes<<endl;
 	cout<<"read Quorum= "<<readQuorumSize<<"  write Quorum= "<<writeQuorumSize<<endl;
 	pthread_t sendThd, rcvThd;
 	int ret1, ret2;
@@ -503,7 +524,8 @@ int m_read(std::string& str_in, int file_number=0){
 	pthread_mutex_lock(&rdWr_req_sendLock);	
 
 	rdWr_req_send.seq=outSeqNum;
-	rdWr_req_send.needed=readQuorumSize-1;
+	rdWr_req_send.needed=readQuorumSize;
+	rdWr_req_send.votesIn=myVotes;
 	outSeqNum++;
 	sendToAll(ptr);
 	
@@ -512,7 +534,7 @@ int m_read(std::string& str_in, int file_number=0){
 	pthread_cond_wait(&rdWr_req_sendCondVar,&rdWr_req_sendLock);
 	
 	//check if timer expired or you got enough GRANTS
-	if(rdWr_req_send.grantedNodes.size()>=rdWr_req_send.needed){
+	if(rdWr_req_send.votesIn >= rdWr_req_send.needed){
 		//kill timer thread
 		int cancelRet=pthread_cancel(child);
 		if (0!=cancelRet){
@@ -582,7 +604,8 @@ int m_write(std::string str_in, int file_number=0){
 	pthread_mutex_lock(&rdWr_req_sendLock);	
 
 	rdWr_req_send.seq=outSeqNum;
-	rdWr_req_send.needed=writeQuorumSize-1;
+	rdWr_req_send.needed=writeQuorumSize;
+	rdWr_req_send.votesIn=myVotes;
 	outSeqNum++;
 	sendToAll(ptr);
 
@@ -591,7 +614,7 @@ int m_write(std::string str_in, int file_number=0){
 	pthread_cond_wait(&rdWr_req_sendCondVar,&rdWr_req_sendLock);
 	
 	//check if timer expired or you got enough GRANTS
-	if(rdWr_req_send.grantedNodes.size()>=rdWr_req_send.needed){
+	if(rdWr_req_send.votesIn >= rdWr_req_send.needed){
 		//kill timer thread
 		int cancelRet=pthread_cancel(child);
 		if (0!=cancelRet){
